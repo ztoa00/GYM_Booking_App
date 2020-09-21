@@ -1,17 +1,25 @@
 from datetime import datetime, timedelta
-from flask import render_template, request, redirect, flash, url_for
+from flask import render_template, request, redirect, flash, url_for, jsonify
 from flask_login import login_user, current_user, login_required, logout_user
 from sqlalchemy import desc
 
-from flask_backend.app_src import app, bcrypt, db
-from flask_backend.app_src.models import User, GYM, Activity, ActivityTimeSlot, Reservation
+from app_src import app, bcrypt, db
+from app_src.models import User, GYM, Activity, ActivityTimeSlot, Reservation
 
 
+@app.errorhandler(404)
+def not_found(e):
+    print(e)
+    flash('404')
+    return redirect(url_for('home'))
+
+
+@app.route('/index')
 @app.route('/')
 def home():
     # if current_user.is_authenticated and not current_user.is_admin:
     if current_user.is_authenticated :
-        return redirect(url_for('index'))
+        return render_template('index.html')
     else:
         next_page = request.args.get('next')
         return render_template('login.html', next_page=next_page)
@@ -34,33 +42,11 @@ def logging_in():
         if next_page:
             return redirect(next_page)
         else:
-            if current_user.is_admin:
-                return redirect(url_for('ad_index'))
-            else:
-                return redirect(url_for('index'))
+           return redirect(url_for('home'))
     else:
         flash('Incorrect Login Credentials')
         return redirect(url_for('home'))
-
-
-@app.route('/index')
-@login_required
-def index():
-    # return render_template('index.html', current_user=current_user)
-    return app.send_static_file('index.html')
     
-
-'''
-# this is not in current version
-@app.route('/ad_index')
-@login_required
-def ad_index():
-    if current_user.is_admin:
-        return render_template('ad_index.html', current_user=current_user)
-    else:
-        return redirect(url_for('index'))
-'''
-
 
 @app.route('/logout')
 @login_required
@@ -69,7 +55,47 @@ def logout():
     return redirect(url_for('home'))
 
 
-@app.route('/update_user', methods=["POST"])
+
+
+@app.route('/api/get_current_user')
+def get_currenr_user():
+    return_data = {
+        'user_id': current_user.id, 
+        'user_name': current_user.user_name,
+        'first_name': current_user.first_name,
+        'sur_name': current_user.sur_name,
+        'email': current_user.email,
+        'dob': current_user.dob.strftime('%Y-%m-%d'),
+        'phone_number_1': current_user.phone_number_1,
+        'phone_number_2': current_user.phone_number_2,
+        'is_verified ': current_user.is_verified,
+    }
+    return jsonify(return_data)
+
+
+@app.route('/api/get_gym_details')
+def get_gym_details():
+    gym = GYM.query.filter_by(owner_id=current_user.id).first()
+    if gym:
+        return_data = {
+            'gym_id': gym.id,
+            'name': gym.name,
+            'description': gym.description,
+            'picture_1_file_path': gym.picture_1_file_path,
+            'picture_2_file_path': gym.picture_2_file_path,
+            'picture_3_file_path': gym.picture_3_file_path,
+            'location ': gym.location,
+            'email': gym.email,
+            'phone_number': gym.phone_number,
+        }
+    else:
+        # No gym for current user
+        return_data = {}
+    return jsonify(return_data)
+
+
+
+@app.route('/api/update_user', methods=["POST"])
 @login_required
 def update_user():
 
