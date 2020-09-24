@@ -2,6 +2,8 @@ from datetime import datetime, timedelta
 from flask import render_template, request, redirect, flash, url_for
 from flask_login import login_user, current_user, login_required, logout_user
 from sqlalchemy import desc
+#from sqlalchemy.orm import sessionmaker
+
 
 from app_src import app, db, bcrypt
 from app_src.models import User, Gym, Activity, ActivityTimeSlot, Reservation
@@ -399,27 +401,72 @@ def delete_reservation():
 
 
 # show activites
-@app.route('/list_activities/<int:id>', methods=["POST",'GET'])
+@app.route('/list_activities/', methods=["POST",'GET'])
 @login_required
-def list_activities(id):
+def list_activities():
     
     # this can also done by more accurate recent update first by take activytimeslot from desc 
     # and use activityid from that and query or join with it
-    gym = Gym.query.filter_by(id=id).first()
-    activities = Activity.query.filter_by(gym_id=gym.id).paginate()
-    act_timeslots = ActivityTimeSlot.query.order_by(ActivityTimeSlot.date).paginate()
-    return render_template('listActs.html', activities=activities, activity_timeslots=act_timeslots)
+    #activities = Activity.query.paginate()
+    #act_timeslots = ActivityTimeSlot.query.order_by(ActivityTimeSlot.date).paginate()
+    #return render_template('listActs.html', activities=activities)
 
+    #Session = sessionmaker(bind = engine)
+    #session = Session()
+
+    #activities = session.query(Activity, ActivityTimeSlot).filter(Activity.id == ActivityTimeSlot.activity_id).paginate()
+    #activities = select * from activity left join activity_time_slot on activity.id == activity_time_slot.activity_id
+
+    activities = db.session.query(Activity, ActivityTimeSlot).outerjoin(ActivityTimeSlot, Activity.id == ActivityTimeSlot.activity_id).order_by(desc(ActivityTimeSlot.id)).all()
+    all_current_activites = {}
+
+    for val in activities:
+        activity = {
+            'Name' : val.Activity.name,
+            'Description' : val.Activity.description,
+            'Date' : val.ActivityTimeSlot.date,
+            'Time' : val.ActivityTimeSlot.time
+        }
+        all_current_activites[val.ActivityTimeSlot.id] = activity 
+    return all_current_activites
+
+    '''
+    for act in activities:
+        time = str(act.ActivityTimeSlot.time)
+        #time = datetime.strptime(time, '%H:%M:%SEC')
+        #date = datetime.strptime(str(act.ActivityTimeSlot.date), '%Y-%m-%d')
+        date = str(act.ActivityTimeSlot.date)
+        val = [act.Activity.name, time, date]
+        if val not in acts.values():
+            acts[val.] = val
+            i += 1
+    return acts
+    '''
+    #return render_template('listActs.html', activities=activities)
 
 # show my reservations
 @app.route('/my_reservations', methods=["POST", 'GET'])
 @login_required
 def my_reservations():
 
+    '''
+    #not needed
     activities = Activity.query.paginate()
     activity_timeslot = ActivityTimeSlot.query.order_by(ActivityTimeSlot.date).paginate()
     reservations = Reservation.query.filter_by(user_id=current_user.id).paginate()
     return render_template('myReserves.html', reservations=reservations, activities=activities, activity_timeslot=activity_timeslot)
+    '''
+
+    user = User.query.filter_by(id = current_user.id).first()
+    reserved_activites_details = {}
+    reservations = user.reser_user
+    '''
+    for i in range(len(reservations)):
+        val = ActivityTimeSlot.query.filter_by(id=reservations[i].id).first()
+        act = Activity.query.filter_by(id=val.activity_id).first()
+        d[x] = str(val.id) +'   '+ str(val.date) +'     '+ str(val.time) + '    '+str(act.name)
+        x += 1
+    return d
 
     '''
     for reservation in reservations:
@@ -427,10 +474,12 @@ def my_reservations():
         activity = Activity.query.filter_by(id=activity_timeslot.activity_id).first()
 
         reserved_activity = {
-            'activity_timeslot': activity_timeslot,
-            'activity': activity,
+            'Name': activity.name,
+            'Description': activity.description,
+            'Date': activity_timeslot.date,
+            'Time': activity_timeslot.time
         }
-        reserved_activites_details.append(reserved_activity)
+        reserved_activites_details[activity_timeslot.id] = reserved_activity
 
     # reserved_activites_details[0]['activity'].name
     # reserved_activites_details[0]['activity'].description
@@ -438,7 +487,6 @@ def my_reservations():
     # reserved_activites_details[0]['activity_timeslot'].date
     # reserved_activites_details[0]['activity_timeslot'].time
     return reserved_activites_details
-    '''
     
 
 # show my activity time slots
@@ -463,8 +511,24 @@ def my_activity_timeslots():
 @login_required
 def show_my_activities():
     
+    '''
     gyms = Gym.query.filter_by(owner_id=current_user.id).paginate()
     activities = Activity.query.paginate()
     activity_timeslot = ActivityTimeSlot.query.order_by(ActivityTimeSlot.date).paginate()
     return render_template('showMyActivities.html', gyms=gyms, activities=activities, activity_timeslot=activity_timeslot )
+    '''
+    my_activities = {}
 
+    #for gym in gyms:
+    activities = db.session.query(User, Gym, Activity, ActivityTimeSlot).select_from(ActivityTimeSlot).join(Activity , Activity.id == ActivityTimeSlot.activity_id).join(Gym, Activity.gym_id == Gym.id).join(User, Gym.owner_id == current_user.id).all()
+    #activities = Activity.query.filter_by(gym_id=gym.id).all()
+
+    for activity in activities:
+        my_activity = {
+            'Name': activity.Activity.name,
+            'Description': activity.Activity.description,
+            'Date': activity.ActivityTimeSlot.date,
+            'Time': activity.ActivityTimeSlot.time
+        }
+        my_activities[activity.ActivityTimeSlot.id] = my_activity
+    return my_activities
