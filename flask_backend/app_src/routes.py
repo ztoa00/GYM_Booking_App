@@ -1,478 +1,545 @@
 from datetime import datetime, timedelta
-from flask import render_template, request, redirect, flash, url_for
+from flask import render_template, request, redirect, flash, url_for, jsonify
 from flask_login import login_user, current_user, login_required, logout_user
-from sqlalchemy import desc 
-
+from sqlalchemy import desc
 
 from app_src import app, db, bcrypt
-from app_src.models import User, Gym, Activity, ActivityTimeSlot, Reservation
+from app_src.models import User, Gym, Activity, ActivityTimeslot, Reservation
 
 
-@app.route('/')
-def home():
-
-    # if current_user.is_authenticated and not current_user.is_admin:
-    if current_user.is_authenticated :
-        return redirect(url_for(list_activities))
-
-    else:
-        next_page = request.args.get('next')
-        return render_template('login.html', next_page=next_page)
-
-
-@app.route('/logging_in', methods=["POST", 'GET'])
-def logging_in():
-
-    email = request.form["email"]
-    pwd = request.form["password"]
-
-    usr = User.query.filter_by(email=email).first()
-    if usr:
-        pw_hash = bcrypt.generate_password_hash(usr.password)
-
-    if usr is None:
-        flash('Invalid Login')
-        return redirect(url_for('home'))
-
-    elif bcrypt.check_password_hash(pw_hash, pwd):
-        login_user(user=usr, remember=True)
-        next_page = request.form.get('next')
-
-        if next_page:
-            return redirect(next_page)
-        else:
-            if current_user.is_admin:
-                return redirect(url_for('ad_index'))
-            else:
-                return redirect(url_for('list_activities'))
-    else:
-        flash('Incorrect Login Credentials')
-        return redirect(url_for('home'))
+@app.errorhandler(404)
+def not_found(e):
+    return redirect(url_for('home'))
 
 
 @app.route('/index')
-@login_required
-def index():
-    # return render_template('index.html', current_user=current_user)
-    return app.send_static_file('index.html')
+@app.route('/')
+def home():
+    try:
+
+        # if current_user.is_authenticated and not current_user.is_admin:
+        if current_user.is_authenticated :
+            return render_template('index.html')
+        else:
+            next_page = request.args.get('next')
+            return render_template('login.html', next_page=next_page)
+
+    except Exception as msg:
+        flash(msg)
+        return render_template('login.html')
+
+
+@app.route('/logging_in', methods=["POST"])
+def logging_in():
+    try:
+
+        email = request.form.get("email")
+        pwd = request.form.get("password")
+        usr = User.query.filter_by(email=email).first()
+        if usr is None:
+            flash('Invalid Login')
+            return redirect(url_for('home'))
+        elif bcrypt.check_password_hash(usr.password, pwd):
+            login_user(user=usr, remember=True)
+            next_page = request.form.get('next')
+            if next_page:
+                return redirect(next_page)
+            else:
+            return redirect(url_for('home'))
+        else:
+            flash('Incorrect Login Credentials')
+            return redirect(url_for('home'))
+
+    except Exception as msg:
+        flash(msg)
+        return redirect(url_for('home'))
     
-
-'''
-# this is not in current version
-@app.route('/ad_index')
-@login_required
-def ad_index():
-    if current_user.is_admin:
-        return render_template('ad_index.html', current_user=current_user)
-    else:
-        return redirect(url_for('index'))
-'''
-
 
 @app.route('/logout')
 @login_required
 def logout():
-    logout_user()
-    return redirect(url_for('home'))
+    try:
+
+        logout_user()
+        return redirect(url_for('home'))
+
+    except Exception as msg:
+        flash(msg)
+        return redirect(url_for('home'))
 
 
-@app.route('/update_user', methods=["POST", 'GET'])
+
+
+
+
+
+
+@app.route('/api/get_current_user')
+def get_currenr_user():
+    try:
+
+        return_data = {
+            'success': True,
+            'message': '',
+            'data' = {
+                'user_id': current_user.id, 
+                'user_name': current_user.user_name,
+                'first_name': current_user.first_name,
+                'sur_name': current_user.sur_name,
+                'email': current_user.email,
+                'dob': current_user.dob.strftime('%Y-%m-%d'),
+                'phone_number_1': current_user.phone_number_1,
+                'phone_number_2': current_user.phone_number_2,
+                'is_verified ': current_user.is_verified,
+            }    
+        }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = {'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+        
+
+@app.route('/api/get_gym_details')
+def get_gym_details():
+    try:
+
+        gym = GYM.query.filter_by(owner_id=current_user.id).first()
+        if gym:
+            return_data = {
+                'success': True, 
+                'message': '',
+                'data': {
+                    'gym_id': gym.id,
+                    'name': gym.name,
+                    'description': gym.description,
+                    'picture_1_file_path': gym.picture_1_file_path,
+                    'picture_2_file_path': gym.picture_2_file_path,
+                    'picture_3_file_path': gym.picture_3_file_path,
+                    'location ': gym.location,
+                    'email': gym.email,
+                    'phone_number': gym.phone_number,
+                }
+            }
+        else:
+            return_data = { 'success': True, 'message': 'No Gym for Current User', 'data' = {} }
+        
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+
+
+@app.route('/api/update_user', methods=["POST"])
 @login_required
 def update_user():
+    try:
 
-    # profile and medic store on certain location and save that path with filename on db
-    #dob = datetime.strptime(dob, '%Y-%m-%d')
+        user_name = request.form.get("user_name", current_user.user_name)
+        first_name = request.form.get("first_name", current_user.first_name)
+        sur_name = request.form.get("sur_name", current_user.sur_name)
+        dob = request.form.get("dob", current_user.dob)
+        phone_number_1 = request.form.get("phone1", current_user.phone_number_1)
+        phone_number_2 = request.form.get("phone2", current_user.phone_number_2)
+        profile_picture_file_path = request.form.get("profile_pic", current_user.profile_picture_file_path)
+        medic_certificate_file_path = request.form.get("medic_certificate", current_user.medic_certificate_file_path)
+        email = request.form.get("email", current_user.email)
 
-    exist = User.query.filter_by(id = current_user.id).first()
+        # profile and medic store on certain location and save that path with filename on db
+        dob = datetime.strptime(dob, '%Y-%m-%d')
 
-    if request.method == 'POST':
+        exist = User.query.filter_by(email=email).first()
+        if exist:
+            msg = 'Email already Taken'
+        else:
+            current_user.user_name = user_name
+            current_user.first_name = first_name
+            current_user.sur_name = sur_name
+            current_user.dob = dob
+            current_user.phone_number_1 = phone_number_1
+            current_user.phone_number_2 = phone_number_2
+            current_user.profile_picture_file_path = profile_picture_file_path
+            current_user.medic_certificate_file_path = medic_certificate_file_path
+            current_user.email = email
 
-        user_name = request.form.get("user_name", False)
-        if user_name != '' and user_name != 0:
-            exist.user_name = user_name
+            db.session.commit()
 
-        first_name = request.form.get("first_name", False)
-        if first_name != '' and first_name != 0:
-            exist.first_name = first_name
+            msg = 'User Details updated successfully'
 
-        sur_name = request.form.get("sur_name", False)
-        if sur_name != '' and sur_name != 0:
-            exist.sur_name = sur_name
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
 
-        phone_number_1 = request.form.get("phone_number", False)
-        if phone_number_1 != '' and phone_number_1 != 0:
-            exist.phone_number_1 = phone_number_1
-
-        email = request.form.get("email", False)
-        if email != '' and email != 0:
-            exist.email = email
-    else:
-        return render_template('updateUser.html')    
-
-    db.session.commit()
-
-    flash('User Details updated successfully')
-    return redirect(url_for('update_user'))
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
-@app.route('/add_gym', methods=["POST", 'GET'])
+@app.route('/add_gym', methods=["POST"])
 @login_required
 def add_gym():
+    try:
 
-    if request.method == 'POST':
-        name = request.form.get("name", False)
-        description = request.form.get("description", False)
-        picture_1_file_path = request.form.get("picture_1_file_path",False)
-        picture_2_file_path = request.form.get("picture_2_file_path",False)
-        picture_3_file_path = request.form.get("picture_3_file_path",False)
-        location = request.form.get("location", False)
-        email = request.form.get("email",False)
-        phone_number = request.form.get("phone_number",False)
+        name = request.form.get("name", '')
+        description = request.form.get("description", '')
+        picture_1_file_path = request.form.get("picture_1_file_path", '')
+        picture_2_file_path = request.form.get("picture_2_file_path", '')
+        picture_3_file_path = request.form.get("picture_3_file_path", '')
+        location = request.form.get("location", '')
+        email = request.form.get("email", '')
+        phone_number = request.form.get("phone_number", '')
         
-    else:
-        return render_template('createGym.html')
+        gym = Gym(owner_ref = current_user,
+                name=name,
+                description=description,
+                picture_1_file_path=picture_1_file_path,
+                picture_2_file_path=picture_2_file_path,
+                picture_3_file_path=picture_3_file_path,
+                location=location,
+                email=email,
+                phone_number=phone_number)
         
-    gym = Gym(name=name,
-              owner = current_user,
-              description=description,
-              picture_1_file_path=picture_1_file_path,
-              picture_2_file_path=picture_2_file_path,
-              picture_3_file_path=picture_3_file_path,
-              location=location,
-              email=email,
-              phone_number=phone_number)
-    
-    
-    db.session.add(gym)
-    db.session.commit()
-    flash('Gym Added successfully')
-    return redirect(url_for('add_gym'))
+        db.session.add(gym)
+        db.session.commit()
+
+        msg = 'Gym Added successfully'
+        
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
-@app.route('/update_gym/<int:id>', methods=["POST", 'GET'])
+@app.route('/update_gym', methods=["POST"])
 @login_required
-def update_gym(id):
+def update_gym():
+    try:
 
-    gym = Gym.query.filter_by(id=id, owner_id = current_user.id).first()
+        gym = GYM.query.filter_by(owner_id=current_user.id).first()
+        if gym:
+            name = request.form.get("name", gym.name)
+            description = request.form.get("description", gym.description)
+            picture_1_file_path = request.form.get("picture_1_file_path", gym.picture_1_file_path)
+            picture_2_file_path = request.form.get("picture_2_file_path", gym.picture_2_file_path)
+            picture_3_file_path = request.form.get("picture_3_file_path", gym.picture_3_file_path)
+            location = request.form.get("location", gym.location)
+            email = request.form.get("email", gym.email)
+            phone_number = request.form.get("phone_number", gym.phone_number)
 
-    if not gym:
-        flash('No gym exist like that!')
-        return redirect(url_for('add_gym'))
-            
-    else:
-        if request.method == 'POST':
+            gym.name = name
+            gym.description = description
+            gym.picture_1_file_path = picture_1_file_path
+            gym.picture_2_file_path = picture_2_file_path
+            gym.picture_3_file_path = picture_3_file_path
+            gym.location = location
+            gym.email = email
+            gym.phone_number = phone_number
+
+            db.session.commit()
+            msg = 'Gym Details Updated successfully'
         
-            name = request.form.get("name",False)
-            if name == '' or name == 0:
-                gym.name = gym.name
-            else:
-                gym.name = name
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
 
-            description = request.form.get("description",False)
-            if description == '' or description == 0:
-                gym.description = gym.description
-            else:
-                gym.description = description
-
-            location = request.form.get("location",False)
-            if location == '' or location == 0:
-                gym.location = gym.location
-            else:
-                gym.location = location
-
-            email = request.form.get("email",False)
-            if email == '' or email == 0:
-                gym.email = gym.email
-            else:
-                gym.email = email 
-
-            phone_number = request.form.get("phone_number",False)
-            if phone_number == 0 or phone_number == '':
-                gym.phone_number = gym.phone_number 
-            else:
-                gym.phone_number = phone_number
-            
-        else:
-            return render_template('updateGym.html')
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
-    db.session.commit()
-    flash('Gym Details Updated successfully')
-    return redirect(url_for('add_gym'))
-
-
-@app.route('/add_activity/<int:id>', methods=["POST", 'GET'])
+@app.route('/add_activity', methods=["POST"])
 @login_required
-def add_activity(id):
+def add_activity():
+    try:
 
-    try : 
-        gym = Gym.query.filter_by(id=id, owner_id = current_user.id).first()
-
-        if not gym:
-            flash("Such gym don't exist!")
-            return redirect(url_for('list_activities'))
-
-        '''
-        if gym.owner_id != current_user.id:
-            flash("This gym dont belong to you!")
-            return redirect(url_for(add_gym))
-        '''
-
-        if request.method == 'POST':
-            name = request.form.get("name", False)
-            description = request.form.get("description", False)
-            picture_1_file_path = request.form.get("picture_1_file_path",False)
-            picture_2_file_path = request.form.get("picture_2_file_path",False)
-        else:
-            return render_template('addActivity.html')
-
+        name = request.form.get("name", '')
+        description = request.form.get("description", '')
+        picture_1_file_path = request.form.get("picture_1_file_path", '')
+        picture_2_file_path = request.form.get("picture_2_file_path", '')
+            
         # currently we have only one gym so we can directly query from gym table based on user id
-        # while update to multi gym under one user we need to ask from user this is for which gym
+        # while update to multi gym under one user we need to ask from user this is for which gym ie. 
+        # gym = GYM.query.filter_by(id=gym_id).first()   
+        gym = GYM.query.filter_by(owner_id=current_user.id).first()
 
-
-        activity = Activity(gymowner = gym,
+        activity = Activity(gym_ref=gym,
                             name=name,
-                            description=description)
+                            description=description,
+                            picture_1_file_path=picture_1_file_path,
+                            picture_2_file_path=picture_2_file_path)
         
         db.session.add(activity)
         db.session.commit()
-        flash('Activity Added successfully')
-        return redirect(url_for('add_gym'))
-    
-    except:
-        flash('Failed to add activity. Try again!')
-        return redirect(url_for('addActivity.html'))
+        msg = 'Activity Added successfully'
+        
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+
 
 
 # update activity 
 # this is not in current version
-@app.route('/update_activity/<int:gym_id>/<int:id>', methods=["POST", 'GET'])
+@app.route('/update_activity', methods=["POST"])
 @login_required
-def update_activity(gym_id,id):
-
-    # this is need to send in hidden in form of previous page ie. update_activty_html
+def update_activity():
     try:
-        gym = Gym.query.filter_by(owner_id = current_user.id, id = gym_id).first()
-        if not gym:
-            flash("No gym exist for the given activity!")
-            return redirect(url_for('list_activities'))
 
-        activity = Activity.query.filter_by(gym_id=gym.id,id=id).first()
-        if not activity:
-            flash("Such activity doesn't exist!")
-            return redirect(url_for('add_activity/<gym_id>'))
+        # this is need to send in form of previous page 
+        activity_id = request.form.get('activity_id', False)
+        if activity_id:
+            activity = Activity.query.filter_by(id=activity_id).first()
+            if activity:
+                name = request.form.get("name", activity.name)
+                description = request.form.get("description", activity.description)
+                picture_1_file_path = request.form.get("picture_1_file_path", activity.picture_1_file_path)
+                picture_2_file_path = request.form.get("picture_2_file_path", activity.picture_2_file_path)
 
-        if request.method == 'POST':
-            name = request.form.get('name', False)
-            if name == '' or name == 0:
-                activity.name = activity.name
-            else:
                 activity.name = name
-
-            description = request.form.get("description", False)
-            if description == '' or description == 0:
-                activity.description = activity.description
-            else:
                 activity.description = description
-
-            picture_1_file_path = request.form.get("picture_1_file_path", False)
-            picture_2_file_path = request.form.get("picture_2_file_path", False)
-
+                activity.picture_1_file_path = picture_1_file_path
+                activity.picture_2_file_path = picture_2_file_path
+            
+                db.session.commit()
+                msg = 'Activity Details Updated successfully'
+            else:
+                msg = 'No such Activity'
         else:
-            return render_template('updateActivity.html')
+            msg = 'activity_id not found in request data'
 
-        # currently we have only one gym so we dont want to update
-        # while update to multi gym under one user we need to ask from user this is for which gym  
-    
-        db.session.commit()
-        flash('Activity Details Updated successfully')
-        return redirect(url_for('home'))
-    
-    except:
-        flash('Update activity failed!')
-        return redirect(url_for('home'))
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
 
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+        
 
 # delete activity
 # this is not in current version
-@app.route('/delete_activity/<int:gym_id>/<int:id>', methods=["POST", 'GET'])
+# need to delete its corresponding timeslots too
+@app.route('/delete_activity', methods=["POST"])
 @login_required
-def delete_activity(gym_id,id):
-
-    # this is need to send in hidden in form of previous page ie. delete_activty_html
-    gym = Gym.query.filter_by(owner_id = current_user.id, id = gym_id).first()
-        if not gym:
-            flash("No gym exist for the given activity!")
-            return redirect(url_for('list_activities'))
-
-    activity = Activity.query.filter_by(id=id, gym_id=gym.id).first()
-
+def delete_activity():
     try:
 
-        if activity:
-            db.session.delete(activity)
-            db.session.commit()
-            flash('Activity Deleted successfully')
-            return redirect(url_for('add_gym'))
+        # this is need to send in form of previous page 
+        activity_id = request.form.get('activity_id', False)
+        if activity_id:
+            activity = Activity.query.filter_by(id=activity_id).first()
+            if activity:
+                db.session.delete(activity)
+                db.session.commit()
+                msg = 'Activity Deleted successfully'
+            else:
+                msg = 'No such Activity'
         else:
-            flash("Activity doesn't exist")
-            return redirect(url_for('add_gym'))
+            msg = 'activity_id not found in request data'
 
-    except:
-        flash('Activity Deleted failed')
-        return redirect(url_for('add_gym'))
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+
+
+@app.route('/add_activity_timeslot', methods=["POST"])
+@login_required
+def add_activity_timeslot():
+    try:
+
+        # this is need to send in form of previous page 
+        activity_id = request.form.get('activity_id', False)
+        if activity_id:
+            activity = Activity.query.filter_by(id=activity_id).first()
+            if activity:
+                date = request.form.get("date", '')
+                time = request.form.get("time", '')
+                room_count = request.form.get("room_count", '')
+                fee = request.form.get("fee", '')
+                
+                date = datetime.strptime(date, '%Y-%m-%d')
+                time = datetime.strptime(time, '%H:%M')
+                
+                activity_timeslot = ActivityTimeslot(activity_ref=activity,
+                                                    date=date,
+                                                    time=time,
+                                                    room_count=room_count,
+                                                    fee=fee)
+                
+                db.session.add(activity_timeslot)
+                db.session.commit()
+                msg = 'Activity TimeSlot Added successfully'
+            else:
+                msg = 'No such Activity'
+        else:
+            msg = 'activity_id not found in request data'
+
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
         
 
-@app.route('/add_activity_timeslot/<int:gym_id>/<int:act_id>', methods=["POST", 'GET'])
+@app.route('/update_activity_timeslot', methods=["POST"])
 @login_required
-def add_activity_timeslot(gym_id,act_id):
+def update_activity_timeslot():
+    try:
 
-    #userGym = Gym.query.filter_by(owner_id=current_user.id).first()
-    gym = Gym.query.filter_by(owner_id = current_user.id, id = gym_id).first()
-        if not gym:
-            flash("No gym exist for the given activity!")
-            return redirect(url_for('list_activities'))
+        # this is need to send in form of previous page 
+        activity_timeslot_id = request.form.get('activity_timeslot_id', False)
+        if activity_timeslot_id:
+            activity_timeslot = ActivityTimeslot.query.filter_by(id=activity_timeslot_id).first()
+            if activity_timeslot:
+                date = request.form.get("date", activity_timeslot.date)
+                time = request.form.get("time", activity_timeslot.time)
+                room_count = request.form.get("room_count", activity_timeslot.room_count)
+                fee = request.form.get("fee", activity_timeslot.fee)
 
-    activity = Activity.query.filter_by(gym_id=gym.id, id=act_id).first()
+                date = datetime.strptime(date, '%Y-%m-%d')
+                time = datetime.strptime(time, '%H:%M')   
+                
+                activity_timeslot.date = date
+                activity_timeslot.time = time
+                activity_timeslot.room_count = room_count
+                activity_timeslot.fee = fee
 
-    # this is need to send in hidden in form of previous page ie. add_activity_timeslot_html
-    if request.method == 'POST':
-        date = request.form.get('date', False)
-        time = request.form.get('time', False)
-    else:
-        return render_template('addActTS.html')
-    
-    date = datetime.strptime(date, '%Y-%m-%d')
-    time = datetime.strptime(time, '%H:%M')
-    
-    activity_timeslot = ActivityTimeSlot(act=activity,
-                                         date=date,
-                                         time=time)
-    
-    db.session.add(activity_timeslot)
-    db.session.commit()
-    flash('Activity TimeSlot Added successfully')
-    return redirect(url_for('add_gym'))
+                db.session.commit()
+                msg = 'Activity TimeSlot Updated successfully'
+            else:
+                msg = 'No such Activity Timeslot'
+        else:
+            msg = 'activity_timeslot_id not found in request data'
+
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
-@app.route('/update_activity_timeslot/<int:gym_id>/<int:act_id>/<int:act_ts_id>', methods=["POST", 'GET'])
+@app.route('/delete_activity_timeslot', methods=["POST"])
 @login_required
-def update_activity_timeslot(gym_id, act_id,act_ts_id):
-    
-    # this is need to send in hidden in form of previous page ie. update_activity_timeslot_html 
-    # or we can take that from quering activitytimeslot table by using id 
-    
-    gym = Gym.query.filter_by(id = gym_id, owner_id = current_user.id).first()
-    activity = Activity.query.filter_by(id = act_id, gym_id = gym.id).first()
-    activity_timeslot = ActivityTimeSlot.query.filter_by(id=act_ts_id, activity_id=activity.id).first()
+def delete_activity_timeslot():
+    try:
 
-    if not activity_timeslot:
-        flash('No activity exists like that')
-        return redirect(url_for(add_gym))
+        # this is need to send in form of previous page 
+        activity_timeslot_id = request.form.get('activity_timeslot_id', False)
+        if activity_timeslot_id:
+            activity_timeslot = ActivityTimeslot.query.filter_by(id=activity_timeslot_id).first()
+            if activity_timeslot:
+                db.session.delete(activity_timeslot)
+                db.session.commit()
+                msg = 'Activity TimeSlot Deleted successfully'
+            else:
+                msg = 'No such Activity Timeslot'
+        else:
+            msg = 'activity_timeslot_id not found in request data'
 
-    if request.method == 'POST':
-        date = request.form.get('date', False)
-        if date != 0 and date != '':
-            date = datetime.strptime(date, '%Y-%m-%d')
-            activity_timeslot.date = date
-            
-        time = request.form.get('time', False)
-        if time != 0 and time != '':
-            time = datetime.strptime(time, '%H:%M')
-            activity_timeslot.time = time    
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
 
-    else:
-        return render_template('updateTS.html')
-   
-
-    db.session.commit()
-    flash('Activity TimeSlot Updated successfully')
-    return redirect(url_for('add_gym'))
-
-
-@app.route('/delete_activity_timeslot/<int:gym_id>/<int:act_id>/<int:act_ts_id>', methods=["POST", 'GET'])
-@login_required
-def delete_activity_timeslot(gym_id, act_id, act_ts_id):
-
-    gym = Gym.query.filter_by(id = gym_id, owner_id = current_user.id).first()
-    activity = Activity.query.filter_by(id = act_id, gym_id = gym.id).first()
-    activity_timeslot = ActivityTimeSlot.query.filter_by(id=act_ts_id, activity_id=activity.id).first()
-
-    if not activity_timeslot:
-        flash('No activity exists like that')
-        return redirect(url_for(add_gym))
-
-    db.session.delete(activity_timeslot)
-    db.session.commit()
-    flash('Activity TimeSlot Deleted successfully')
-    return redirect(url_for('add_gym'))
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
 # add reservation
-@app.route('/add_reservation/<int:gym_id>/<int:act_id>/<int:act_ts_id>', methods=['GET'])
+@app.route('/add_reservation', methods=["POST"])
 @login_required
-def add_reservation(gym_id, act_id, act_ts_id):
+def add_reservation():
+    try:
 
+        # this is need to send in form of previous page 
+        activity_timeslot_id = request.form.get('activity_timeslot_id', False)
+        if activity_timeslot_id:
+            activity_timeslot = ActivityTimeslot.query.filter_by(id=activity_timeslot_id).first()
+            if activity_timeslot:
+                reservation = Reservation(user_ref=current_user,
+                                        activity_timeslot_ref=activity_timeslot)
+                if reservation:                   
+                    db.session.add(reservation)
+                    db.session.commit()
+                    msg = 'Reservation Added successfully'
+                else:
+                    msg = 'No such Reservation'
+            else:
+                msg = 'No such Activity Timeslot'
+        else:
+            msg = 'activity_timeslot_id not found in request data'
 
-    userGym = Gym.query.filter_by(id=gym_id).first()
-    gymActivity = Activity.query.filter_by(gym_id=userGym.id, id=act_id).first()
-    actTimeSlot = ActivityTimeSlot.query.filter_by(activity_id=gymActivity.id, id=act_ts_id).first()
-    
-    reservation = Reservation(reserve_user=current_user,
-                              reserve_activity=gymActivity,
-                              reserve_time_slot=actTimeSlot)
-    
-    db.session.add(reservation)
-    db.session.commit()
-    flash('Reservation Added successfully')
-    return redirect(url_for('add_gym'))
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
 
 
 # delete reservation (Deadline : before 3hrs)
-@app.route('/delete_reservation/<int:act_ts_id>', methods=["POST", 'GET'])
+@app.route('/delete_reservation', methods=["POST"])
 @login_required
 def delete_reservation():
- 
-    activity_timeslot = ActivityTimeSlot.query.filter_by(id = act_ts_id).first()
-    # this is need to send in hidden in form of previous page ie. delete_reservation_html
+    try:
 
-    reservation = Reservation.query.filter_by(activity_timeslot_id=activity_timeslot.id, user_id = current_user.id).first()
-    
-    time = activity_timeslot.time
-    #time_ = activity_timeslot.time
-    #datetime_ = date_ + ' ' + time_
-    time = datetime.strptime(time, '%H:%M')
+        # this is need to send in form of previous page 
+        reservation_id = request.form.get('reservation_id', False)
+        if reservation_id:
+            reservation = Reservation.query.filter_by(id=reservation_id).first()
+            if reservation:
+                date_ = reservation.activity_timeslot_ref.date
+                time_ = reservation.activity_timeslot_ref.time
+                datetime_ = date_ + ' ' + time_
+                datetime_ = datetime.strptime(datetime_, '%Y-%m-%d %H:%M')
 
-    now = datetime.now()
-    modify_now = now + timedelta(minutes = 180)
-    modify_now = modify_now.strftime('%H:%M')
-    modify_now = datetime.strptime(modify_now, '%H:%M')
+                now = datetime.now()
+                modify_now = now + timedelta(minutes = 180)
+                modify_now = modify_now.strftime('%Y-%m-%d %H:%M')
+                modify_now = datetime.strptime(modify_now, '%Y-%m-%d %H:%M')
 
-    if modify_now <= time:
-        db.session.delete(reservation)
-        db.session.commit()
-        flash('Reservation Deleted successfully')
-        return redirect(url_for('add_activity'))
-    
-    time = activity_timeslot.time
-    if time:
-        db.session.delete(reservation)
-        db.session.commit()
-        flash('Reservation Deleted successfully')
-        return redirect(url_for('add_activity'))
-    else:
-        flash('Reservation Cancelation is only allowed for 3hours before the event')
-        return redirect(url_for('add_activity'))
+                if modify_now <= datetime_:
+                    db.session.delete(reservation)
+                    db.session.commit()
+                    msg = 'Reservation Deleted successfully'
+                else:
+                    msg = 'Reservation Cancelation is only allowed for 3hours before the event'
+            else:
+                msg = 'No such Reservation'
+        else:
+            msg = 'reservation_id not found in request data'
+
+        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 200
+
+    except Exception as msg:
+        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return jsonify(return_data), 500
+
+        
+
+
+
+
+
+
+
+
+
 
 
 # show activites
-@app.route('/list_activities/', methods=["POST",'GET'])
+@app.route('/list_activities', methods=["POST"])
 @login_required
 def list_activities():
     
-    # this can also done by more accurate recent update first by take activytimeslot from desc 
-    # and use activityid from that and query or join with it
-   
     activities = db.session.query(Activity, ActivityTimeSlot).outerjoin(ActivityTimeSlot, Activity.id == ActivityTimeSlot.activity_id).order_by(desc(ActivityTimeSlot.id)).all()
     all_current_activites = {}
 
@@ -489,17 +556,17 @@ def list_activities():
 
 
 # show my reservations
-@app.route('/my_reservations', methods=["POST", 'GET'])
+@app.route('/my_reservations', methods=["POST"])
 @login_required
 def my_reservations():
 
-    user = User.query.filter_by(id = current_user.id).first()
     reserved_activites_details = {}
-    reservations = user.reser_user
+    reservations = current_user.reservations
    
     for reservation in reservations:
         activity_timeslot = ActivityTimeSlot.query.filter_by(id=reservation.activity_timeslot_id).first()
         activity = Activity.query.filter_by(id=activity_timeslot.activity_id).first()
+        # join
 
         reserved_activity = {
             'Name': activity.name,
@@ -509,18 +576,13 @@ def my_reservations():
         }
         reserved_activites_details[activity_timeslot.id] = reserved_activity
 
-    # reserved_activites_details[0]['activity'].name
-    # reserved_activites_details[0]['activity'].description
-    # reserved_activites_details[0]['activity'].gym_id # .pic1 # .pic2
-    # reserved_activites_details[0]['activity_timeslot'].date
-    # reserved_activites_details[0]['activity_timeslot'].time
     return reserved_activites_details
     
 
 # show my activity time slots
 # this is only for one activty in current version
 '''
-@app.route('/my_activity_timeslots', methods=["POST", 'GET'])
+@app.route('/my_activity_timeslots', methods=["POST"])
 @login_required
 def my_activity_timeslots():
 
@@ -532,10 +594,7 @@ def my_activity_timeslots():
 
 
 # show my activities
-# show reservation for my activity
-# this is not in current version
-
-@app.route('/show_my_activities',methods=['POST','GET'])
+@app.route('/show_my_activities',methods=['POST'])
 @login_required
 def show_my_activities():
     
@@ -554,3 +613,7 @@ def show_my_activities():
             my_activities[activity.ActivityTimeSlot.id] = my_activity
 
     return my_activities
+
+
+# show reservation for my activity
+# this is not in current version
