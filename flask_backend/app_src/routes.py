@@ -45,7 +45,7 @@ def logging_in():
             if next_page:
                 return redirect(next_page)
             else:
-            return redirect(url_for('home'))
+                return redirect(url_for('home'))
         else:
             flash('Incorrect Login Credentials')
             return redirect(url_for('home'))
@@ -74,14 +74,15 @@ def logout():
 
 
 
-@app.route('/api/get_current_user')
+@app.route('/api/get_current_user', methods=["POST"])
+@login_required
 def get_currenr_user():
     try:
-
+        
         return_data = {
             'success': True,
             'message': '',
-            'data' = {
+            'data': {
                 'user_id': current_user.id, 
                 'user_name': current_user.user_name,
                 'first_name': current_user.first_name,
@@ -96,15 +97,17 @@ def get_currenr_user():
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = {'success': False, 'message': msg, 'data' = {} }
+        return_data = {'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
         
 
-@app.route('/api/get_gym_details')
+@app.route('/api/get_gym_details', methods=["POST"])
+@login_required
 def get_gym_details():
     try:
 
-        gym = GYM.query.filter_by(owner_id=current_user.id).first()
+        gym = Gym.query.filter_by(owner_id=current_user.id).first()
+        print(gym)
         if gym:
             return_data = {
                 'success': True, 
@@ -122,12 +125,12 @@ def get_gym_details():
                 }
             }
         else:
-            return_data = { 'success': True, 'message': 'No Gym for Current User', 'data' = {} }
+            return_data = { 'success': True, 'message': 'No Gym for Current User', 'data': {} }
         
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -167,11 +170,11 @@ def update_user():
 
             msg = 'User Details updated successfully'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -204,11 +207,11 @@ def add_gym():
 
         msg = 'Gym Added successfully'
         
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -217,7 +220,7 @@ def add_gym():
 def update_gym():
     try:
 
-        gym = GYM.query.filter_by(owner_id=current_user.id).first()
+        gym = Gym.query.filter_by(owner_id=current_user.id).first()
         if gym:
             name = request.form.get("name", gym.name)
             description = request.form.get("description", gym.description)
@@ -240,11 +243,11 @@ def update_gym():
             db.session.commit()
             msg = 'Gym Details Updated successfully'
         
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -260,8 +263,8 @@ def add_activity():
             
         # currently we have only one gym so we can directly query from gym table based on user id
         # while update to multi gym under one user we need to ask from user this is for which gym ie. 
-        # gym = GYM.query.filter_by(id=gym_id).first()   
-        gym = GYM.query.filter_by(owner_id=current_user.id).first()
+        # gym = Gym.query.filter_by(id=gym_id).first()   
+        gym = Gym.query.filter_by(owner_id=current_user.id).first()
 
         activity = Activity(gym_ref=gym,
                             name=name,
@@ -273,11 +276,11 @@ def add_activity():
         db.session.commit()
         msg = 'Activity Added successfully'
         
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -311,11 +314,11 @@ def update_activity():
         else:
             msg = 'activity_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
         
 
@@ -340,11 +343,11 @@ def delete_activity():
         else:
             msg = 'activity_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -380,11 +383,11 @@ def add_activity_timeslot():
         else:
             msg = 'activity_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
         
 
@@ -418,11 +421,11 @@ def update_activity_timeslot():
         else:
             msg = 'activity_timeslot_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -444,11 +447,11 @@ def delete_activity_timeslot():
         else:
             msg = 'activity_timeslot_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -476,11 +479,11 @@ def add_reservation():
         else:
             msg = 'activity_timeslot_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
 
@@ -516,11 +519,11 @@ def delete_reservation():
         else:
             msg = 'reservation_id not found in request data'
 
-        return_data = { 'success': True, 'message': msg, 'data' = {} }
+        return_data = { 'success': True, 'message': msg, 'data': {} }
         return jsonify(return_data), 200
 
     except Exception as msg:
-        return_data = { 'success': False, 'message': msg, 'data' = {} }
+        return_data = { 'success': False, 'message': msg, 'data': {} }
         return jsonify(return_data), 500
 
         
@@ -536,27 +539,28 @@ def delete_reservation():
 
 
 # show activites
-@app.route('/list_activities', methods=["POST"])
+@app.route('/list_activities', methods=["POST","GET"])
 @login_required
 def list_activities():
     
-    activities = db.session.query(Activity, ActivityTimeSlot).outerjoin(ActivityTimeSlot, Activity.id == ActivityTimeSlot.activity_id).order_by(desc(ActivityTimeSlot.id)).all()
+    activities = db.session.query(Activity, ActivityTimeslot).outerjoin(ActivityTimeslot, Activity.id == ActivityTimeslot.activity_id).order_by(desc(ActivityTimeslot.id)).all()
+    print(activities)
     all_current_activites = {}
 
     for val in activities:
         activity = {
             'Name' : val.Activity.name,
             'Description' : val.Activity.description,
-            'Date' : val.ActivityTimeSlot.date,
-            'Time' : val.ActivityTimeSlot.time
+            'Date' : val.ActivityTimeslot.date,
+            'Time' : val.ActivityTimeslot.time
         }
-        all_current_activites[val.ActivityTimeSlot.id] = activity 
+        all_current_activites[val.ActivityTimeslot.id] = activity 
 
     return all_current_activites
 
 
 # show my reservations
-@app.route('/my_reservations', methods=["POST"])
+@app.route('/my_reservations', methods=["POST","GET"])
 @login_required
 def my_reservations():
 
@@ -564,7 +568,7 @@ def my_reservations():
     reservations = current_user.reservations
    
     for reservation in reservations:
-        activity_timeslot = ActivityTimeSlot.query.filter_by(id=reservation.activity_timeslot_id).first()
+        activity_timeslot = ActivityTimeslot.query.filter_by(id=reservation.activity_timeslot_id).first()
         activity = Activity.query.filter_by(id=activity_timeslot.activity_id).first()
         # join
 
@@ -588,29 +592,29 @@ def my_activity_timeslots():
 
     # this activity id is need to send in hidden in form of previous page ie. html page    
     activity_id = request.form['activity_id']
-    activity_timeslots = ActivityTimeSlot.query.filter_by(activity_id=activity_id).order_by(ActivityTimeSlot.date).order_by(ActivityTimeSlot.time).all()
+    activity_timeslots = ActivityTimeslot.query.filter_by(activity_id=activity_id).order_by(ActivityTimeslot.date).order_by(ActivityTimeslot.time).all()
     return activity_timeslots
 '''
 
 
 # show my activities
-@app.route('/show_my_activities',methods=['POST'])
+@app.route('/show_my_activities',methods=['POST',"GET"])
 @login_required
 def show_my_activities():
     
     my_activities = {}
 
-    activities = db.session.query(Gym, Activity, ActivityTimeSlot).select_from(ActivityTimeSlot).join(Activity , Activity.id == ActivityTimeSlot.activity_id).join(Gym, Activity.gym_id == Gym.id).all()
+    activities = db.session.query(Gym, Activity, ActivityTimeslot).select_from(ActivityTimeslot).join(Activity , Activity.id == ActivityTimeslot.activity_id).join(Gym, Activity.gym_id == Gym.id).all()
     
     for activity in activities:
         if activity.Gym.owner_id == current_user.id:
             my_activity = {
                 'Name': activity.Activity.name,
                 'Description': activity.Activity.description,
-                'Date': activity.ActivityTimeSlot.date,
-                'Time': activity.ActivityTimeSlot.time
+                'Date': activity.ActivityTimeslot.date,
+                'Time': activity.ActivityTimeslot.time
             }
-            my_activities[activity.ActivityTimeSlot.id] = my_activity
+            my_activities[activity.ActivityTimeslot.id] = my_activity
 
     return my_activities
 

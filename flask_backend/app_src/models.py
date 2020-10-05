@@ -60,7 +60,7 @@ class Activity(db.Model):
     picture_1_file_path = db.Column(db.String(200))
     picture_2_file_path = db.Column(db.String(200))
 
-    timeslots = db.relationship('ActivityTimeSlot', backref='activity_ref', lazy=True)
+    timeslots = db.relationship('ActivityTimeslot', backref='activity_ref', lazy=True)
     
 
 class ActivityTimeslot(db.Model):
